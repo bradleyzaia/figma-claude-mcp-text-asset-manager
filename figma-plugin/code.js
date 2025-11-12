@@ -339,6 +339,149 @@ const toolHandlers = {
     };
   },
 
+  /**
+   * Phase 3: Get text content from text nodes
+   */
+  get_text_content: async (args) => {
+    const nodeIds = args.nodeIds;
+    const textNodes = [];
+
+    if (nodeIds && Array.isArray(nodeIds)) {
+      // Get specific nodes by ID
+      for (const id of nodeIds) {
+        const node = figma.getNodeById(id);
+        if (node && node.type === 'TEXT') {
+          textNodes.push(node);
+        }
+      }
+    } else {
+      // Get from selection
+      const selection = figma.currentPage.selection;
+      for (const node of selection) {
+        if (node.type === 'TEXT') {
+          textNodes.push(node);
+        }
+      }
+    }
+
+    // Serialize text node data
+    const serializedTextNodes = textNodes.map(node => ({
+      id: node.id,
+      name: node.name,
+      characters: node.characters,
+      fontSize: node.fontSize,
+      fontName: node.fontName,
+      textAlignHorizontal: node.textAlignHorizontal,
+      textAlignVertical: node.textAlignVertical,
+    }));
+
+    return {
+      textNodes: serializedTextNodes,
+    };
+  },
+
+  /**
+   * Phase 3: Update text content in a text node
+   */
+  set_text_content: async (args) => {
+    const nodeId = args.nodeId;
+    const newText = args.text;
+
+    if (!nodeId || !newText) {
+      throw new Error('nodeId and text are required');
+    }
+
+    const node = figma.getNodeById(nodeId);
+    if (!node) {
+      throw new Error(`Node with ID ${nodeId} not found`);
+    }
+
+    if (node.type !== 'TEXT') {
+      throw new Error(`Node ${nodeId} is not a text node (type: ${node.type})`);
+    }
+
+    // Store previous text
+    const previousText = node.characters;
+
+    // Load font before editing
+    await figma.loadFontAsync(node.fontName);
+
+    // Update text
+    node.characters = newText;
+
+    return {
+      nodeId: node.id,
+      nodeName: node.name,
+      previousText: previousText,
+      newText: newText,
+      fontName: node.fontName,
+    };
+  },
+
+  /**
+   * Phase 3: Create a new text node
+   */
+  create_text_node: async (args) => {
+    const text = args.text;
+    const x = args.x !== undefined ? args.x : 0;
+    const y = args.y !== undefined ? args.y : 0;
+    const fontSize = args.fontSize || 16;
+    const fontFamily = args.fontFamily || 'Inter';
+    const fontStyle = args.fontStyle || 'Regular';
+    const parentId = args.parentId;
+
+    // Create text node
+    const textNode = figma.createText();
+
+    // Load font
+    const fontName = { family: fontFamily, style: fontStyle };
+    try {
+      await figma.loadFontAsync(fontName);
+    } catch (error) {
+      // If font fails to load, try Inter Regular as fallback
+      const fallbackFont = { family: 'Inter', style: 'Regular' };
+      await figma.loadFontAsync(fallbackFont);
+      textNode.fontName = fallbackFont;
+    }
+
+    // Set text and properties
+    textNode.fontName = fontName;
+    textNode.fontSize = fontSize;
+    textNode.characters = text;
+    textNode.x = x;
+    textNode.y = y;
+
+    // Add to parent if specified
+    let parentName = null;
+    if (parentId) {
+      const parent = figma.getNodeById(parentId);
+      if (parent && 'appendChild' in parent) {
+        parent.appendChild(textNode);
+        parentName = parent.name;
+      } else {
+        throw new Error(`Parent node ${parentId} not found or cannot contain children`);
+      }
+    } else {
+      // Add to current page
+      figma.currentPage.appendChild(textNode);
+    }
+
+    // Select the new node and zoom to it
+    figma.currentPage.selection = [textNode];
+    figma.viewport.scrollAndZoomIntoView([textNode]);
+
+    return {
+      nodeId: textNode.id,
+      nodeName: textNode.name,
+      text: textNode.characters,
+      x: textNode.x,
+      y: textNode.y,
+      fontSize: textNode.fontSize,
+      fontName: textNode.fontName,
+      parentName: parentName,
+    };
+  },
+
   // More tools will be added here in future phases
 };
 

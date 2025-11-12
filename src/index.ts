@@ -294,6 +294,78 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["nodeIds"]
         }
+      },
+      {
+        name: "get_text_content",
+        description: "Read text content and styling from text nodes. Returns the text, font, size, and alignment.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              description: "Array of text node IDs to read from. If omitted, reads from selected text nodes."
+            }
+          }
+        }
+      },
+      {
+        name: "set_text_content",
+        description: "Update text content in text nodes. Preserves existing formatting.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeId: {
+              type: "string",
+              description: "ID of the text node to update"
+            },
+            text: {
+              type: "string",
+              description: "New text content"
+            }
+          },
+          required: ["nodeId", "text"]
+        }
+      },
+      {
+        name: "create_text_node",
+        description: "Create a new text layer in Figma with specified content and styling.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            text: {
+              type: "string",
+              description: "Text content for the new node"
+            },
+            x: {
+              type: "number",
+              description: "X position (optional, defaults to 0)"
+            },
+            y: {
+              type: "number",
+              description: "Y position (optional, defaults to 0)"
+            },
+            fontSize: {
+              type: "number",
+              description: "Font size (optional, defaults to 16)"
+            },
+            fontFamily: {
+              type: "string",
+              description: "Font family name (optional, defaults to 'Inter')"
+            },
+            fontStyle: {
+              type: "string",
+              description: "Font style (optional, defaults to 'Regular')"
+            },
+            parentId: {
+              type: "string",
+              description: "Parent node ID to add the text to (optional, adds to current page if not specified)"
+            }
+          },
+          required: ["text"]
+        }
       }
     ],
   };
@@ -617,6 +689,140 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: responseText.trim()
+          }
+        ]
+      };
+    }
+
+    if (name === "get_text_content") {
+      // Get text content from text nodes
+      const nodeIds = (args as any)?.nodeIds;
+
+      // Send request to Figma
+      const result = await sendToFigma("get_text_content", { nodeIds });
+
+      // Format response
+      if (result.textNodes.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "No text nodes found. Either specify node IDs or select text nodes in Figma."
+            }
+          ]
+        };
+      }
+
+      let responseText = `**Text Content** (${result.textNodes.length} text node${result.textNodes.length > 1 ? 's' : ''})\n\n`;
+
+      result.textNodes.forEach((node: any, index: number) => {
+        responseText += `**${index + 1}. ${node.name}**\n`;
+        responseText += `   - ID: ${node.id}\n`;
+        responseText += `   - Text: "${node.characters}"\n`;
+        responseText += `   - Font: ${node.fontName.family} ${node.fontName.style}\n`;
+        responseText += `   - Size: ${node.fontSize}px\n`;
+        responseText += `   - Alignment: ${node.textAlignHorizontal}\n`;
+        responseText += '\n';
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText.trim()
+          }
+        ]
+      };
+    }
+
+    if (name === "set_text_content") {
+      // Update text content
+      const nodeId = (args as any)?.nodeId;
+      const text = (args as any)?.text;
+
+      if (!nodeId || !text) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: Both nodeId and text parameters are required."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Send request to Figma
+      const result = await sendToFigma("set_text_content", { nodeId, text });
+
+      // Format response
+      let responseText = `Text updated successfully!\n\n`;
+      responseText += `**${result.nodeName}**\n`;
+      responseText += `   - ID: ${result.nodeId}\n`;
+      responseText += `   - New text: "${result.newText}"\n`;
+      responseText += `   - Previous text: "${result.previousText}"\n`;
+      responseText += `   - Font: ${result.fontName.family} ${result.fontName.style}\n`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText
+          }
+        ]
+      };
+    }
+
+    if (name === "create_text_node") {
+      // Create new text node
+      const text = (args as any)?.text;
+      const x = (args as any)?.x || 0;
+      const y = (args as any)?.y || 0;
+      const fontSize = (args as any)?.fontSize || 16;
+      const fontFamily = (args as any)?.fontFamily || 'Inter';
+      const fontStyle = (args as any)?.fontStyle || 'Regular';
+      const parentId = (args as any)?.parentId;
+
+      if (!text) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: text parameter is required."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Send request to Figma
+      const result = await sendToFigma("create_text_node", {
+        text,
+        x,
+        y,
+        fontSize,
+        fontFamily,
+        fontStyle,
+        parentId
+      });
+
+      // Format response
+      let responseText = `Text node created successfully!\n\n`;
+      responseText += `**${result.nodeName}**\n`;
+      responseText += `   - ID: ${result.nodeId}\n`;
+      responseText += `   - Text: "${result.text}"\n`;
+      responseText += `   - Position: (${Math.round(result.x)}, ${Math.round(result.y)})\n`;
+      responseText += `   - Font: ${result.fontName.family} ${result.fontName.style}\n`;
+      responseText += `   - Size: ${result.fontSize}px\n`;
+      if (result.parentName) {
+        responseText += `   - Parent: ${result.parentName}\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText
           }
         ]
       };
