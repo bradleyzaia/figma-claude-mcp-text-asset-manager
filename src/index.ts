@@ -366,6 +366,69 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["text"]
         }
+      },
+      {
+        name: "rename_node",
+        description: "Change the name of one or more nodes. Supports bulk renaming with pattern.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              description: "Array of node IDs to rename"
+            },
+            newName: {
+              type: "string",
+              description: "New name for the node(s). For bulk rename, use {index} placeholder (e.g., 'Item {index}')"
+            }
+          },
+          required: ["nodeIds", "newName"]
+        }
+      },
+      {
+        name: "set_node_visibility",
+        description: "Show or hide nodes in Figma.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              description: "Array of node IDs to modify"
+            },
+            visible: {
+              type: "boolean",
+              description: "true to show, false to hide"
+            }
+          },
+          required: ["nodeIds", "visible"]
+        }
+      },
+      {
+        name: "set_node_lock",
+        description: "Lock or unlock nodes to prevent/allow editing.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              description: "Array of node IDs to modify"
+            },
+            locked: {
+              type: "boolean",
+              description: "true to lock, false to unlock"
+            }
+          },
+          required: ["nodeIds", "locked"]
+        }
       }
     ],
   };
@@ -823,6 +886,144 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: "text",
             text: responseText
+          }
+        ]
+      };
+    }
+
+    if (name === "rename_node") {
+      // Rename nodes
+      const nodeIds = (args as any)?.nodeIds;
+      const newName = (args as any)?.newName;
+
+      if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0 || !newName) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: Both nodeIds (array) and newName (string) parameters are required."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Send request to Figma
+      const result = await sendToFigma("rename_node", { nodeIds, newName });
+
+      // Format response
+      let responseText = `Renamed ${result.renamed.length} node${result.renamed.length > 1 ? 's' : ''} successfully!\n\n`;
+
+      result.renamed.forEach((node: any, index: number) => {
+        responseText += `${index + 1}. **${node.newName}**\n`;
+        responseText += `   - ID: ${node.id}\n`;
+        responseText += `   - Previous name: "${node.oldName}"\n`;
+        responseText += `   - Type: ${node.type}\n`;
+        responseText += '\n';
+      });
+
+      if (result.notFound && result.notFound.length > 0) {
+        responseText += `⚠️  ${result.notFound.length} node${result.notFound.length > 1 ? 's' : ''} not found:\n`;
+        result.notFound.forEach((id: string) => {
+          responseText += `   - ${id}\n`;
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText.trim()
+          }
+        ]
+      };
+    }
+
+    if (name === "set_node_visibility") {
+      // Set visibility of nodes
+      const nodeIds = (args as any)?.nodeIds;
+      const visible = (args as any)?.visible;
+
+      if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0 || visible === undefined) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: Both nodeIds (array) and visible (boolean) parameters are required."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Send request to Figma
+      const result = await sendToFigma("set_node_visibility", { nodeIds, visible });
+
+      // Format response
+      const action = visible ? "shown" : "hidden";
+      let responseText = `${result.updated.length} node${result.updated.length > 1 ? 's' : ''} ${action} successfully!\n\n`;
+
+      result.updated.forEach((node: any, index: number) => {
+        responseText += `${index + 1}. **${node.name}** (${node.type}) - ID: ${node.id}\n`;
+      });
+
+      if (result.notFound && result.notFound.length > 0) {
+        responseText += `\n⚠️  ${result.notFound.length} node${result.notFound.length > 1 ? 's' : ''} not found:\n`;
+        result.notFound.forEach((id: string) => {
+          responseText += `   - ${id}\n`;
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText.trim()
+          }
+        ]
+      };
+    }
+
+    if (name === "set_node_lock") {
+      // Lock/unlock nodes
+      const nodeIds = (args as any)?.nodeIds;
+      const locked = (args as any)?.locked;
+
+      if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0 || locked === undefined) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: Both nodeIds (array) and locked (boolean) parameters are required."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Send request to Figma
+      const result = await sendToFigma("set_node_lock", { nodeIds, locked });
+
+      // Format response
+      const action = locked ? "locked" : "unlocked";
+      let responseText = `${result.updated.length} node${result.updated.length > 1 ? 's' : ''} ${action} successfully!\n\n`;
+
+      result.updated.forEach((node: any, index: number) => {
+        responseText += `${index + 1}. **${node.name}** (${node.type}) - ID: ${node.id}\n`;
+      });
+
+      if (result.notFound && result.notFound.length > 0) {
+        responseText += `\n⚠️  ${result.notFound.length} node${result.notFound.length > 1 ? 's' : ''} not found:\n`;
+        result.notFound.forEach((id: string) => {
+          responseText += `   - ${id}\n`;
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText.trim()
           }
         ]
       };

@@ -482,7 +482,132 @@ const toolHandlers = {
     };
   },
 
-  // More tools will be added here in future phases
+  /**
+   * Phase 4: Rename one or more nodes
+   */
+  rename_node: async (args) => {
+    const nodeIds = args.nodeIds || [];
+    const newName = args.newName;
+
+    if (!Array.isArray(nodeIds)) {
+      throw new Error('nodeIds must be an array');
+    }
+
+    const renamed = [];
+    const notFound = [];
+
+    for (let i = 0; i < nodeIds.length; i++) {
+      const id = nodeIds[i];
+      const node = figma.getNodeById(id);
+
+      if (!node) {
+        notFound.push(id);
+        continue;
+      }
+
+      const oldName = node.name;
+
+      // Support {index} placeholder for bulk renaming
+      const processedName = newName.replace(/\{index\}/g, (i + 1).toString());
+      node.name = processedName;
+
+      renamed.push({
+        id: node.id,
+        oldName: oldName,
+        newName: node.name,
+        type: node.type,
+      });
+    }
+
+    return {
+      renamed: renamed,
+      notFound: notFound,
+    };
+  },
+
+  /**
+   * Phase 4: Set visibility of nodes
+   */
+  set_node_visibility: async (args) => {
+    const nodeIds = args.nodeIds || [];
+    const visible = args.visible;
+
+    if (!Array.isArray(nodeIds)) {
+      throw new Error('nodeIds must be an array');
+    }
+
+    if (typeof visible !== 'boolean') {
+      throw new Error('visible must be a boolean');
+    }
+
+    const updated = [];
+    const notFound = [];
+
+    for (const id of nodeIds) {
+      const node = figma.getNodeById(id);
+
+      if (!node) {
+        notFound.push(id);
+        continue;
+      }
+
+      node.visible = visible;
+
+      updated.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+      });
+    }
+
+    return {
+      updated: updated,
+      notFound: notFound,
+    };
+  },
+
+  /**
+   * Phase 4: Lock or unlock nodes
+   */
+  set_node_lock: async (args) => {
+    const nodeIds = args.nodeIds || [];
+    const locked = args.locked;
+
+    if (!Array.isArray(nodeIds)) {
+      throw new Error('nodeIds must be an array');
+    }
+
+    if (typeof locked !== 'boolean') {
+      throw new Error('locked must be a boolean');
+    }
+
+    const updated = [];
+    const notFound = [];
+
+    for (const id of nodeIds) {
+      const node = figma.getNodeById(id);
+
+      if (!node) {
+        notFound.push(id);
+        continue;
+      }
+
+      node.locked = locked;
+
+      updated.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+      });
+    }
+
+    return {
+      updated: updated,
+      notFound: notFound,
+    };
+  },
+
+  // Phase 5 will be added next
 };
 
 /**
