@@ -607,6 +607,82 @@ const toolHandlers = {
     };
   },
 
+  /**
+   * New: Set stroke properties (color, weight, alignment)
+   */
+  set_node_stroke: async (args) => {
+    const nodeIds = args.nodeIds || [];
+    const color = args.color;
+    const weight = args.weight;
+    const align = args.align;
+
+    if (!Array.isArray(nodeIds)) {
+      throw new Error('nodeIds must be an array');
+    }
+
+    const updated = [];
+    const notFound = [];
+
+    for (const id of nodeIds) {
+      const node = figma.getNodeById(id);
+
+      if (!node) {
+        notFound.push(id);
+        continue;
+      }
+
+      // Check if node supports strokes
+      if (!('strokes' in node)) {
+        throw new Error(`Node ${id} (${node.type}) does not support strokes`);
+      }
+
+      // Update stroke color
+      if (color) {
+        const rgb = {
+          r: color.r !== undefined ? color.r : 0,
+          g: color.g !== undefined ? color.g : 0,
+          b: color.b !== undefined ? color.b : 0,
+        };
+
+        const opacity = color.a !== undefined ? color.a : 1;
+
+        // Create solid color paint
+        const strokePaint = {
+          type: 'SOLID',
+          color: rgb,
+          opacity: opacity,
+        };
+
+        node.strokes = [strokePaint];
+      }
+
+      // Update stroke weight
+      if (weight !== undefined) {
+        if ('strokeWeight' in node) {
+          node.strokeWeight = weight;
+        }
+      }
+
+      // Update stroke alignment
+      if (align) {
+        if ('strokeAlign' in node) {
+          node.strokeAlign = align;
+        }
+      }
+
+      updated.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+      });
+    }
+
+    return {
+      updated: updated,
+      notFound: notFound,
+    };
+  },
+
   // Phase 5 will be added next
 };
 

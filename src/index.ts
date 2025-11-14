@@ -429,6 +429,54 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["nodeIds", "locked"]
         }
+      },
+      {
+        name: "set_node_stroke",
+        description: "Change border/stroke properties of nodes including color, weight, and alignment.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            nodeIds: {
+              type: "array",
+              items: {
+                type: "string"
+              },
+              description: "Array of node IDs to modify"
+            },
+            color: {
+              type: "object",
+              properties: {
+                r: {
+                  type: "number",
+                  description: "Red component (0-1)"
+                },
+                g: {
+                  type: "number",
+                  description: "Green component (0-1)"
+                },
+                b: {
+                  type: "number",
+                  description: "Blue component (0-1)"
+                },
+                a: {
+                  type: "number",
+                  description: "Alpha/opacity (0-1, optional, defaults to 1)"
+                }
+              },
+              description: "Stroke color in RGB format (values 0-1). Example: {r: 1, g: 0, b: 0} for red"
+            },
+            weight: {
+              type: "number",
+              description: "Stroke weight/thickness in pixels (optional)"
+            },
+            align: {
+              type: "string",
+              enum: ["CENTER", "INSIDE", "OUTSIDE"],
+              description: "Stroke alignment (optional): CENTER, INSIDE, or OUTSIDE"
+            }
+          },
+          required: ["nodeIds"]
+        }
       }
     ],
   };
@@ -1014,6 +1062,75 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (result.notFound && result.notFound.length > 0) {
         responseText += `\n⚠️  ${result.notFound.length} node${result.notFound.length > 1 ? 's' : ''} not found:\n`;
+        result.notFound.forEach((id: string) => {
+          responseText += `   - ${id}\n`;
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText.trim()
+          }
+        ]
+      };
+    }
+
+    if (name === "set_node_stroke") {
+      // Set stroke properties of nodes
+      const nodeIds = (args as any)?.nodeIds;
+      const color = (args as any)?.color;
+      const weight = (args as any)?.weight;
+      const align = (args as any)?.align;
+
+      if (!nodeIds || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: nodeIds parameter is required and must be a non-empty array."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      if (!color && weight === undefined && !align) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: At least one stroke property (color, weight, or align) must be specified."
+            }
+          ],
+          isError: true
+        };
+      }
+
+      // Send request to Figma
+      const result = await sendToFigma("set_node_stroke", { nodeIds, color, weight, align });
+
+      // Format response
+      let responseText = `Stroke updated for ${result.updated.length} node${result.updated.length > 1 ? 's' : ''} successfully!\n\n`;
+
+      result.updated.forEach((node: any, index: number) => {
+        responseText += `${index + 1}. **${node.name}** (${node.type}) - ID: ${node.id}\n`;
+        if (color) {
+          const colorStr = `rgba(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)}, ${color.a !== undefined ? color.a : 1})`;
+          responseText += `   - Color: ${colorStr}\n`;
+        }
+        if (weight !== undefined) {
+          responseText += `   - Weight: ${weight}px\n`;
+        }
+        if (align) {
+          responseText += `   - Alignment: ${align}\n`;
+        }
+        responseText += '\n';
+      });
+
+      if (result.notFound && result.notFound.length > 0) {
+        responseText += `⚠️  ${result.notFound.length} node${result.notFound.length > 1 ? 's' : ''} not found:\n`;
         result.notFound.forEach((id: string) => {
           responseText += `   - ${id}\n`;
         });
